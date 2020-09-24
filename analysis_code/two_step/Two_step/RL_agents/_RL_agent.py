@@ -1,5 +1,5 @@
 import numpy as np
-from numba import jit, jitclass, i8, f8
+from numba import jit
 from .. import utility as ut
 from .. simulation import _exp_mov_ave
 

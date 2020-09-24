@@ -1,3 +1,6 @@
+# This script generates the imagaing data figures 3, 4 and 5.  To generate the
+# figures, import the script and call the function for the relevant figure.
+
 import os
 import numpy as np
 import pandas as pd
@@ -171,6 +174,7 @@ reward_cng_sessions = [s for s in trial_cov_sessions if
 # ---------------------------------------------------------------------------------
 
 def figure_3():
+    # Generate the panels for figure 3.
     ia.event_rate_histogram(img_sessions, fig_no='3C')
     ia.ave_activity_across_trial(img_sessions, fig_no='3D')
     ia.regression_analysis(trial_cov_sessions, fig_no='3E')
@@ -178,9 +182,18 @@ def figure_3():
     ia.outcomes_AB_correlation(trial_cov_sessions, fig_no='4H')
 
 def figure_4():
+    # Generate the panels for figure 4.
     ia.trajectory_analysis(trial_cov_sessions, fig_no='4AB')
     ia.trajectory_analysis(trial_cov_sessions, fig_no='4C', PCs=[0,3,4])
+    ia.decoding_analysis(trial_cov_sessions, fig_no='4E')
 
 def figure_5():
+    # Generate the panels for figure 5.
     ia.regression_analysis(trans_cng_sessions , predictors='trans_block' , fig_no='5A')
     ia.regression_analysis(reward_cng_sessions, predictors='reward_block', fig_no='5B')
+
+def figure_S5():
+    # Plot neurons with strong selectivity to trial events, a subset
+    # of these are shown in figure S5.
+    for session in trial_cov_sessions:
+        ia.plot_selective_neurons(session, fig_no=session.file_name)

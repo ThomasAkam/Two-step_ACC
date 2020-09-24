@@ -102,7 +102,6 @@ class Experiment:
         self.n_subjects = len(set([session.subject_ID for session in self.sessions]))
         self.n_days = max([session.day for session in self.sessions]) 
         self.subject_IDs= list(set([s.subject_ID for s in self.sessions]))
-
         
     def get_sessions(self, sIDs, days = [], dates = []):
         '''Return list of sessions which match specified subject ID and day numbers
@@ -130,50 +129,7 @@ class Experiment:
         elif len(valid_sessions) == 1: 
             return valid_sessions[0] # Don't return list for single session.
         else:
-            return valid_sessions                
-                 
-    def print_CSO_to_file(self, sIDs, days, file_name = 'sessions_CSO.txt'):
-        f = open(file_name, 'w')
-        sessions = self.get_sessions(sIDs, days)
-        total_trials = sum([s.n_trials for s in sessions])
-        f.write('Data from experiment "{}", {} sessions, {} trials.\n' 
-                'Each trial is indicated by 3 numbers:\n'
-                'First column : Choice      (1 = high poke, 0 = low poke)\n'
-                'Second column: Second step (1 = left poke, 0 = right poke)\n'
-                'Third column : Outcome     (1 = rewarded, 0 = not rewarded)\n'
-                .format(self.name, len(sessions), total_trials))
-        for (i,s) in enumerate(sessions):
-            f.write('''\nSession: {0}, subject ID: {1}, date: {2}\n\n'''\
-                    .format(i + 1, s.subject_ID, s.date))
-            for c,sl,o in zip(s.trial_data['choices'], s.trial_data['second_links'], s.trial_data['outcomes']):
-                f.write('{0:1d} {1:1d} {2:1d}\n'.format(c, sl, o))
-        f.close()
-
-    def check_for_missing_data_files(self):
-        '''Identifies any days where there are data files for only a subset of subjects
-        and reports missing sessions. Called on instantiation of experiment as a check 
-        for any problems in the date transfer pipeline from rig to analysis.
-        '''
-        dates = sorted(set([s.date for s in self.sessions]))
-        sessions_per_date = [len(self.get_sessions('all', dates = date)) for date in dates]
-        if min(sessions_per_date) < self.n_subjects:
-            print('Possible missing data files:')
-            for date, n_sessions in zip(dates, sessions_per_date):
-                if n_sessions < self.n_subjects:
-                    subjects_run = [s.subject_ID for s in self.get_sessions('all', dates = date)]
-                    subjects_not_run = set(self.subject_IDs) - set(subjects_run)
-                    for sID in subjects_not_run:
-                        print(('Date: ' + date + ' sID: {}'.format(sID)))
-
-    def concatenate_sessions(self, days):
-        ''' For each subject, concatinate sessions for specified days
-        into single long sessions.
-        '''
-        concatenated_sessions = []
-        for sID in self.subject_IDs:
-            subject_sessions = self.get_sessions(sID, days)
-            concatenated_sessions.append(ss.concatenated_session(subject_sessions))
-        return concatenated_sessions
+            return valid_sessions                              
 
     # Plotting.
 

@@ -1,7 +1,6 @@
-# This script can be used to generate figures from the  two-step ACC inhibition 
+# This script can be used to generate figures from the two-step ACC inhibition 
 # dataset.  To use it, import the script and then call the functions
 # corresponding to individual figure panels.
-
 
 from Two_step import di, sa, pp
 

@@ -149,55 +149,6 @@ def _latencies(event_times_A, event_times_B):
     latencies = np.min(latencies,0)
     return latencies
 
-def reaction_time_around_reversals(sessions, fig_no=1, pre_post_trials=[-15,40]):
-    '''Plot trajectory of reaction times for common and rare transitions around
-    reversals in the transition probabilities.
-    '''
-    sub_comm_RTs = [] # Reaction times for transitions that were common before reversal.
-    sub_rare_RTs = [] # Reaction times for transitions that were rare before reveral.
-    window_len = np.diff(pre_post_trials)[0]
-    for subject in set([s.subject_ID for s in sessions]):
-        ses_comm_RTs = []
-        ses_rare_RTs = []
-        subject_sessions = [s for s in sessions if s.subject_ID == subject]
-        for session in subject_sessions:
-            reaction_times = _second_step_RTs(session)
-            transitions = session.blocks['trial_trans_state'] == session.trial_data['transitions']  # common vs rare.    
-            rev_trials = np.where(session.blocks['trial_trans_state'][1:] != 
-                                  session.blocks['trial_trans_state'][:-1])[0]+1
-            cRTs = ut.nans([len(rev_trials), window_len])
-            rRTs = ut.nans([len(rev_trials), window_len])
-            for j,s in enumerate(rev_trials):
-                for i in range(window_len):
-                    t = s+i+pre_post_trials[0] # Trial number in session.
-                    if t >= 0 and t < session.n_trials:
-                        if transitions[t] == (i<-pre_post_trials[0]):
-                            cRTs[j,i] = reaction_times[t]
-                        else:
-                            rRTs[j,i] = reaction_times[t]
-            ses_comm_RTs.append(cRTs)
-            ses_rare_RTs.append(rRTs)
-        sub_comm_RTs.append(np.nanmedian(np.vstack(ses_comm_RTs),0))
-        sub_rare_RTs.append(np.nanmedian(np.vstack(ses_rare_RTs),0))
-    sub_comm_RTs = np.vstack(sub_comm_RTs)
-    sub_rare_RTs = np.vstack(sub_rare_RTs)
-    plt.figure(fig_no, figsize=[3.5,3.5], clear=True)
-    x = np.arange(*pre_post_trials)
-    mean_comm_RT = np.mean(sub_comm_RTs,0)
-    mean_rare_RT = np.mean(sub_rare_RTs,0)
-    sem_comm_RT = sem(sub_comm_RTs,0)
-    sem_rare_RT = sem(sub_rare_RTs,0)
-    plt.fill_between(x, mean_comm_RT-sem_comm_RT, mean_comm_RT+sem_comm_RT, alpha=0.2, color='C0')
-    plt.fill_between(x, mean_rare_RT-sem_rare_RT, mean_rare_RT+sem_rare_RT, alpha=0.2, color='C1')
-    plt.plot(x ,mean_comm_RT, color='C0', label='Com. pre-reversal')
-    plt.plot(x, mean_rare_RT, color='C1', label='Rare pre-reversal')
-    plt.axvline(0,color='k', linestyle=':')
-    plt.xlim(*pre_post_trials)
-    plt.xlabel('Trial relative to\ntransition prob. reversal')
-    plt.ylabel('Median RT (ms)')
-    plt.legend()
-    plt.tight_layout()
-
 #----------------------------------------------------------------------------------
 # Trial timing analysis
 #----------------------------------------------------------------------------------
@@ -280,6 +231,80 @@ def _cumulative_histogram(data, bin_edges=np.arange(0,3001)):
     return cum_hist, bin_edges
 
 #----------------------------------------------------------------------------------
+# Poke timeing analysis.
+#----------------------------------------------------------------------------------
+
+def poke_timeing_analysis(sessions, fig_no=1):
+    '''Plot histograms showing the timeing of pokes of different types around trial
+    start and following common and rare transitions.'''
+    fs_cent_poke = [] # First step center poke histograms
+    fs_side_poke = [] # First step side poke histograms
+    sc_cent_poke = [] # Second step common trans center poke histograms
+    sr_cent_poke = [] # Second step rare trans center poke histograms
+    sc_cors_poke = [] # Second step common trans correct side poke histograms
+    sc_incs_poke = [] # Second step common trans inccorrect side poke histograms
+    sr_cors_poke = [] # Second step rare trans correct side poke histograms
+    sr_incs_poke = [] # Second step rare trans inccorrect side poke histograms
+    bins_fs = np.arange(-1000,260,10)
+    bins_ss = np.arange(0,610,10)
+    for session in sessions:
+        t = session.times
+        CR = session.blocks['trial_trans_state'] == session.trial_data['transitions']  # Common/rare transtitions
+        CR_l = CR[ session.trial_data['second_steps'].astype(bool)] # Common/rare for left second step
+        CR_r = CR[~session.trial_data['second_steps'].astype(bool)] # Common/rare for right second step
+        center_pokes = session.ordered_times(['high_poke', 'low_poke'])
+        side_pokes   = session.ordered_times(['left_poke', 'right_poke'])
+        second_steps = session.ordered_times(['left_active', 'right_active'])
+        fs_cent_poke.append(PETH(center_pokes, t['trial_start'], bins_fs))
+        fs_side_poke.append(PETH(side_pokes  , t['trial_start'], bins_fs))
+        sc_cent_poke.append(PETH(center_pokes, second_steps[ CR], bins_ss))
+        sr_cent_poke.append(PETH(center_pokes, second_steps[~CR], bins_ss))
+        sc_cors_poke.append(PETH(t['left_poke' ], t['left_active' ][ CR_l], bins_ss))
+        sc_cors_poke.append(PETH(t['right_poke'], t['right_active'][ CR_r], bins_ss))
+        sc_incs_poke.append(PETH(t['left_poke' ], t['right_active'][ CR_r], bins_ss))
+        sc_incs_poke.append(PETH(t['right_poke'], t['left_active' ][ CR_l], bins_ss))
+        sr_cors_poke.append(PETH(t['left_poke' ], t['left_active' ][~CR_l], bins_ss))
+        sr_cors_poke.append(PETH(t['right_poke'], t['right_active'][~CR_r], bins_ss))
+        sr_incs_poke.append(PETH(t['left_poke' ], t['right_active'][~CR_r], bins_ss))
+        sr_incs_poke.append(PETH(t['right_poke'], t['left_active' ][~CR_l], bins_ss))
+    plt.figure(fig_no, figsize=[12,3.5], clear=True)
+    plt.subplot(1,3,1)
+    plt.fill_between(bins_fs[:-1], np.mean(fs_cent_poke,0), color='C0', alpha=0.5, label='center')
+    plt.fill_between(bins_fs[:-1], np.mean(fs_side_poke,0), color='C1', alpha=0.5, label='side')
+    plt.xlabel('Time relative to trial start (ms)')
+    plt.ylabel('Poke count')
+    plt.xlim(bins_fs[0], bins_fs[-1])
+    plt.ylim(ymin=0)
+    plt.legend(loc='upper left')
+    plt.title('Pokes around trial start')
+    plt.subplot(1,3,2)
+    plt.fill_between(bins_ss[:-1], np.mean(sc_cent_poke,0), color='C0', alpha=0.5, label='center')
+    plt.fill_between(bins_ss[:-1], np.mean(sc_cors_poke,0), color='C2', alpha=0.5, label='correct side')
+    plt.fill_between(bins_ss[:-1], np.mean(sc_incs_poke,0), color='C3', alpha=0.5, label='incorrect side')
+    plt.xlabel('Time relative to second-step state (ms)')
+    plt.xlim(bins_ss[0], bins_ss[-1])
+    plt.ylim(ymin=0)
+    plt.legend(loc='upper left')
+    plt.title('Pokes following common transition')
+    plt.subplot(1,3,3)
+    plt.fill_between(bins_ss[:-1], np.mean(sr_cent_poke,0), color='C0', alpha=0.5, label='center poke')
+    plt.fill_between(bins_ss[:-1], np.mean(sr_cors_poke,0), color='C2', alpha=0.5, label='correct side')
+    plt.fill_between(bins_ss[:-1], np.mean(sr_incs_poke,0), color='C3', alpha=0.5, label='incorrect side')
+    plt.xlabel('Time relative to second-step state (ms)')
+    plt.xlim(bins_ss[0], bins_ss[-1])
+    plt.ylim(ymin=0)
+    plt.legend(loc='upper left')
+    plt.title('Pokes following rare transition')
+    plt.tight_layout()
+
+
+def PETH(times_A, times_B, bins):
+        '''Return a PETH for times_A relative to times_B'''
+        latencies = 1000*(times_A - times_B[:,None]).flatten()
+        latencies = latencies[(latencies>bins[0]) & (latencies<bins[-1])]
+        return np.histogram(latencies, bins)[0]
+
+#----------------------------------------------------------------------------------
 # Reversal analysis
 #----------------------------------------------------------------------------------
 
@@ -347,8 +372,6 @@ def reversal_analysis(sessions, pre_post_trials=[-15,40], fig_no=1, return_fits=
                 print(('Trans. probability reversal, tau: {:.2f}, P_0: {:.2f}'.format(fit_tr['tau'], fit_tr['p_0'])))
             print(('Combined reversals,          tau: {:.2f}, P_0: {:.2f}'.format(fit_br['tau'], fit_br['p_0'])))
 
-
-
 def _block_index(blocks):
     '''Create dict of boolean arrays used for indexing block transitions,
     Note first value of index corresponds to second block of session.'''
@@ -359,7 +382,6 @@ def _block_index(blocks):
     'transition_reversal' : np.array(blocks['reward_states'][:-1]) == np.array(blocks['reward_states'][1:]),
     'any_reversal'        : (np.abs(np.array(blocks['reward_states'][:-1]) - np.array(blocks['reward_states'][1:])) == 2) | \
                             (np.array(blocks['reward_states'][:-1]) == np.array(blocks['reward_states'][1:]))}
-
 
 def _get_choice_trajectories(sessions, trans_type, pre_post_trials):
     '''Evaluates choice trajectories around transitions of specified type. Returns float array
@@ -405,11 +427,9 @@ def _get_choice_trajectories(sessions, trans_type, pre_post_trials):
     else:
         return np.empty([0,np.diff(pre_post_trials)[0]])
 
-
 def _per_subject_ave_choice_trajs(sessions, trans_type, pre_post_trials):
     return np.array([np.nanmean(_get_choice_trajectories([s for s in sessions if s.subject_ID == ID],
                     trans_type, pre_post_trials),0) for ID in set([s.subject_ID for s in sessions])])
-
 
 def _plot_mean_choice_trajectory(per_subject_ave_traj, pre_post_trials, col='b'):
     x = np.arange(pre_post_trials[0], pre_post_trials[1])
@@ -421,7 +441,6 @@ def _plot_mean_choice_trajectory(per_subject_ave_traj, pre_post_trials, col='b')
     plt.plot([pre_post_trials[0], pre_post_trials[1]-1],[0.5,0.5],'k:')
     plt.ylim(0,1)
     plt.xlim(pre_post_trials[0],pre_post_trials[1])
-
 
 def _plot_exponential_fit(fit, p_e, pre_post_trials, last_n, col='r', plot_tau=False):
     t = np.arange(0,pre_post_trials[1])
@@ -435,7 +454,6 @@ def _plot_exponential_fit(fit, p_e, pre_post_trials, last_n, col='r', plot_tau=F
     plt.plot(np.arange(pre_post_trials[0], pre_post_trials[1]),full_traj, col, linewidth=1.5)
     if plot_tau: plt.plot([fit['tau'],fit['tau']],[0,1],':'+ col)
     plt.locator_params(nbins=4)
-
 
 def _end_of_block_p_correct(sessions, last_n=15):
     'Evaluate probabilty of correct choice in last n trials of non-neutral blocks.'
@@ -452,7 +470,6 @@ def _end_of_block_p_correct(sessions, last_n=15):
         n_correct += sum(correct_choices[block_end_trials])
     p_correct = n_correct / n_trials
     return p_correct
-
 
 def _fit_exp_to_choice_traj(subject_ave_trajs, p_e, pre_post_trials,  last_n, double_exp):
     '''Fit an exponential or double exponential curve to the cross-subject average choice 
@@ -484,7 +501,6 @@ def _double_exp_choice_traj(params, p_0, p_e, t):
     tau_f, tau_ratio, fs_mix = params
     tau_s = tau_f*tau_ratio
     return (1. - p_e) + (p_0 + p_e - 1.) * (fs_mix*np.exp(-t/tau_f)+(1-fs_mix)*np.exp(-t/tau_s))
-
 
 def per_animal_end_of_block_p_correct(sessions, last_n=15, fig_no=1, col='b', clf=True, verbose=False):
     '''Evaluate probabilty of correct choice in last n trials of non-neutral blocks on
@@ -607,24 +623,6 @@ def _stay_prob_analysis(session, trial_select):
     n_trials_by_type = [len(s) for s in stay_go_by_type]
     n_stay_by_type =   [sum(s) for s in stay_go_by_type]
     return n_trials_by_type, n_stay_by_type
-
-#----------------------------------------------------------------------------------
-# Invalid press analysis.
-#----------------------------------------------------------------------------------
-
-def _invalid_press_analysis(session):
-    t = session.times
-    ip = {'fs': [], 'sf': [], 'ss': []}
-    for ts, ch, oc in zip(t['trial_start'], t['choice'], t['outcome']):
-        # Invalid pokes to second-step ports during first step.
-        ip['fs'].append(np.sum((ts < t['left_poke'])  & (t['left_poke']  < ch)) +
-                        np.sum((ts < t['right_poke']) & (t['right_poke'] < ch)))
-        # Invalid pokes to first-step ports during second step.
-        ip['sf'].append(np.sum((ch < t['high_poke']) & (t['high_poke'] < oc)) +
-                        np.sum((ch < t['low_poke'])  & (t['low_poke']  < oc)))
-        # Invalid poke to wrong second-step port during second step.
-        ip['ss'].append(np.sum((ch < t['left_poke'])  & (t['left_poke']  < oc)) +
-                        np.sum((ch < t['right_poke']) & (t['right_poke'] < oc)) -1)
 
 #----------------------------------------------------------------------------------
 # Functions called by session and experiment classes.

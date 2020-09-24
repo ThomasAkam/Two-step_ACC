@@ -1,8 +1,8 @@
-# This script can be used to generate figures from the baseline two-step 
-# task dataset.  To use it, import the script and then call the functions
-# corresponding to individual figure panels.
+# This script generates the figures from the baseline two-step task dataset.  
+# To use it, import the script and then call the functions corresponding to
+# individual figure panels.
 
-from Two_step import * #di, pl, sm, lr, rl, pp
+from Two_step import *
 
 #----------------------------------------------------------------------------
 # Data import.
@@ -40,7 +40,10 @@ def figure_2(multiprocessing=False):
     # Panels D-L
     sm.RL_agent_behaviour_comparison(sessions)
 
-def figure_S3(multiprocessing=False):
+def figure_S2():
+    pl.poke_timeing_analysis(sessions, fig_no='S2')
+
+def figure_S4(multiprocessing=False):
     if multiprocessing: 
         pp.enable_multiprocessing()
 

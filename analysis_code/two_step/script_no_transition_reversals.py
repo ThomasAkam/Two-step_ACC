@@ -1,3 +1,8 @@
+# This script can be used to generate the panels in figure S1
+# showing data from the task version without reversals in the
+# Transition matrix. # To generate the panes import the
+# script and call the function figure_S1().
+
 from Two_step import di, lr, mf, pl, mp, gc, pp
 from script_baseline import sessions
 

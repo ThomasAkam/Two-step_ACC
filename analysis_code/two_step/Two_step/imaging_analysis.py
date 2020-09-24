@@ -1,5 +1,4 @@
 import os
-import scipy.io as scio
 import pylab as plt
 import numpy as np
 from scipy.special import erf
@@ -11,27 +10,12 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import cross_val_score, cross_val_predict
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 from sklearn.preprocessing import scale
-from collections import OrderedDict, Counter
+from collections import Counter
 from tqdm import tqdm
 from statsmodels.stats.multitest import multipletests
 from mpl_toolkits.mplot3d import Axes3D
-# from dPCA import dPCA
 
 # Data import ------------------------------------------------------------------
-
-def add_spike_data_to_session_old(session, data_path):
-    'Add the spike data in file data_path to session object.'
-    data = scio.loadmat(data_path)
-    if 'neuron_' in data.keys():
-        spikes = data['neuron_']['S'][0][0]
-    elif 'results' in data.keys():
-        spikes = data['results'][0][0]['S'].toarray()
-    else:
-        print('Data type not recognised')
-        return
-    frame_times = session.times['scope_frame'][:spikes.shape[1]]
-    fs = len(frame_times)/frame_times[-1]
-    session.calcium_data = {'spikes':spikes, 'frame_times':frame_times,'fs':fs}
 
 def add_spike_data_to_session(session, data_folder, verbose=False):
     spikes = np.load(os.path.join(data_folder, 'S.npy'))
@@ -343,6 +327,8 @@ def _aligned_x_ticks(aligned_activity, tick_labels=True):
     plt.xticks(aligned_activity['align_times'],labels, rotation=rotation, ha=ha)
 
 def plot_selective_neurons(session, fig_no=1, n_neurons=10, save_dir=None):
+    '''Plot neurons with strong tuning to particular trial events.  Used to 
+    generate the example neuron plots shown in figure S5.'''
 
     def _plot_neuron_cond(neuron_ind, mask, color, label=None):
         '''Plot the mean +/- SEM activity for trials where mask is true
@@ -437,75 +423,6 @@ def plot_selective_neurons(session, fig_no=1, n_neurons=10, save_dir=None):
     if save_dir: 
         plt.savefig(os.path.join(save_dir, session.file_name + '.pdf'))
 
-
-
-def condition_average_rates(session, fig_no=1, log=False, sort_neurons=True):
-    '''Plot average firing rates for every neuron for a set of different trial event
-    conditions.'''
-    aligned_spikes = session.calcium_data['aligned']['spikes']
-    if log:
-        aligned_spikes = np.log2(aligned_spikes+0.1)-np.log2(0.1)
-    if sort_neurons: # Sort neurons in decending order of mean activity.
-        ordering = np.argsort(np.mean(aligned_spikes, axis=(0,2)))
-        aligned_spikes = aligned_spikes[:,ordering[::-1],:]
-    n_img_trials = aligned_spikes.shape[0]
-    choices, second_steps, outcomes = session.unpack_trial_data('CSO',bool)
-    cond_trials_cs = {'C:1 S:1':  choices &  second_steps, # Trials matching each condition.
-                      'C:1 S:0':  choices & ~second_steps,
-                      'C:0 S:1': ~choices &  second_steps,
-                      'C:0 S:0': ~choices & ~second_steps}
-    cond_style_cs = {'C:1 S:1': 'r',  # Plotting line style for each condition.
-                     'C:1 S:0': 'b',
-                     'C:0 S:1': 'r--',
-                     'C:0 S:0': 'b--'}
-    cond_trials_so = {'S:1 O:1':  second_steps &  outcomes,
-                      'S:0 O:1': ~second_steps &  outcomes,
-                      'S:1 O:0':  second_steps & ~outcomes,
-                      'S:0 O:0': ~second_steps & ~outcomes}
-    cond_style_so = {'S:1 O:1': 'r-.',
-                     'S:0 O:1': 'b-.',
-                     'S:1 O:0': 'r:',
-                     'S:0 O:0': 'b:'}
-    # Evaulate mean activity and number of trials in each condition.
-    cond_n_trials_cs = {cond: np.sum(cond_trials_cs[cond]) for cond in cond_trials_cs.keys()}
-    cond_means_cs = {cond: np.mean(aligned_spikes[cond_trials_cs[cond][:n_img_trials],:,:],0)
-                     for cond in cond_trials_cs.keys()} 
-    cond_n_trials_so = {cond: np.sum(cond_trials_so[cond]) for cond in cond_trials_so.keys()}
-    cond_means_so = {cond: np.mean(aligned_spikes[cond_trials_so[cond][:n_img_trials],:,:],0)
-                     for cond in cond_trials_so.keys()} 
-    # Plotting
-
-    def _plot_cond_aves(cond_means, cond_style, cond_n_trials, sharey=None):
-        ax = plt.subplot(n_h, n_v, p, sharey=sharey)
-        for cond in cond_means:
-            plt.plot(t, cond_means[cond][n,:], cond_style[cond], 
-                     label=cond+', trials: {}'.format(cond_n_trials[cond]))
-        plt.text(0.02, 0.8, 'n'+str(n), transform=ax.transAxes)
-        _aligned_x_ticks(session.calcium_data['aligned'], 'short')
-        plt.xlim(t[0],t[-1])
-        return ax
-
-    t = session.calcium_data['aligned']['t_out']
-    n_h, n_v = 10,6 # Number of subplots horizontally and vertically.
-    plot_per_fig = (n_h*n_v)# - 1
-    f = fig_no
-    plt.figure(f, figsize=[25.6,13.06]).clf()
-    p = 0
-    for n in range(aligned_spikes.shape[1]):
-        f_new = fig_no + 2*n // plot_per_fig
-        if f_new != f: # New figure.
-            plt.tight_layout()
-            plt.figure(f_new, figsize=[25.6,13.06]).clf()
-            f = f_new
-            p = 0
-        p += 1
-        ax1 = _plot_cond_aves(cond_means_cs, cond_style_cs, cond_n_trials_cs)
-        p += 1
-        ax2 = _plot_cond_aves(cond_means_so, cond_style_so, cond_n_trials_so, ax1)
-    plt.tight_layout()
-    ax1.legend(loc=(0,-1.5))
-    ax2.legend(loc=(0,-1.5))
-
 # -------------------------------------------------------------------------------
 # Regression analyses
 # -------------------------------------------------------------------------------
@@ -557,15 +474,12 @@ def regression_analysis(sessions, log=True, fig_no=1, vmax=False, order='phase',
                 cpd_perm[i].append(_CPD(X,y).reshape(n_neurons, n_timepoints, n_predictors))
 
     betas = np.concatenate(betas,0)
-    #betas2 = np.sum(betas**2,0) # Population sum of squared betas.
     cpd = np.nanmean(np.concatenate(cpd,0), axis = 0) # Population CPD is mean over neurons - nanmean handles neuron-timepoints where y has no variance.
     
     if return_betas: return betas
 
     if perm: # Evaluate P values.
         cpd_perm = np.stack([np.nanmean(np.concatenate(cpd_i,0),0) for cpd_i in cpd_perm],0)
-        #betas2_perm = np.stack([np.sum(np.concatenate(betas_i,0)**2,0) for betas_i in betas_perm],0)
-        #betas2_p_value = np.mean(betas2_perm > betas2,0)
         cpd_p_value    = np.mean(cpd_perm    > cpd   ,0)
 
     # Plot CPD timecourses
@@ -589,7 +503,6 @@ def regression_analysis(sessions, log=True, fig_no=1, vmax=False, order='phase',
     
     for ax in (ax1, ax2):
         ax.set_xlim(t[0], t[-1])
-        #ax.set_ylim(bottom=0.3)
         ax.legend(bbox_to_anchor=(1, 1))
         for x in session.calcium_data['aligned']['align_times'][1:-1]:
             ax.axvline(x, color='k', linestyle=':')
@@ -627,7 +540,6 @@ def _CPD(X,y):
         sse_X_i = np.sum((ols.predict(X_i) - y)**2, axis=0)
         cpd[:,i]=(sse_X_i-sse)/sse_X_i
     return cpd
-
 
 def _plot_P_values(p_values, t, ax, y0, multi_comp):
     '''Indicate significance levels with dots of different sizes above plot.'''
@@ -855,160 +767,6 @@ def _far_on_near_axis_distance(x, y):
     return np.mean(np.max(abs_xy,0)/np.min(abs_xy,0))
 
 # -------------------------------------------------------------------------------
-# dPCA analysis 
-# -------------------------------------------------------------------------------
-
-def dPCA_analysis(session, labels='CS', regularizer=0, normalise=False):
-    trial_labels = np.array([l for l in session.unpack_trial_data(labels)]).T.squeeze()
-    aligned_spikes = session.calcium_data['aligned']['spikes']
-    if normalise: 
-        aligned_spikes = aligned_spikes/np.mean(aligned_spikes, axis=(0,2))[None,:,None]
-    n_trials, n_neurons, n_timepoints = aligned_spikes.shape
-    N = np.zeros([2]*len(labels)) # number of trials in each condition   
-    X = np.zeros([n_neurons, n_timepoints] + [2]*len(labels))
-    for trial_aligned_spikes, trial_label in zip(aligned_spikes,trial_labels):
-        trial_label = tuple(trial_label) if type(trial_label) is np.ndarray else (trial_label,)
-        X[(slice(None),slice(None))+trial_label] += trial_aligned_spikes
-        N[trial_label] += 1
-    X = X/N # Per condition average activity.
-    # Center activity.
-    ave_X = np.mean(X.reshape((X.shape[0],-1)),1)
-    for i in range(1+len(labels)):
-        ave_X = np.expand_dims(ave_X,1)
-    X -= ave_X
-    dpca = dPCA.dPCA(labels='T'+labels,regularizer=regularizer)
-    Z = dpca.fit_transform(X)
-    return Z, N
-
-# -------------------------------------------------------------------------------
-# Representational similarity analysis
-# -------------------------------------------------------------------------------
-
-def representational_similarity(sessions, fig_no=1, vmax=1, normalise=False, log=True, 
-                                perm=False, save_dir=None):
-    # Make masks for different trial epochs.  Note:  All sessions must use same time alignment.
-    t = sessions[0].calcium_data['aligned']['t_out']
-    median_latencies = sessions[0].calcium_data['aligned']['median_latencies']
-    epoch_masks = { # Binary masks for different time epochs across trial.
-        'choice'  : (-500 < t) & (t < 0),
-        'secstep' : (   0 < t) & (t < median_latencies['CO']),
-        'outcome' : (median_latencies['CO'] < t) & (t < median_latencies['CO'] + 500),
-        'late'    : (median_latencies['CO']+500 < t) & (t < median_latencies['CO'] + 1000)}#,
-        #'next_ch' : (median_latencies['CC_non']-500 < t) & (t < median_latencies['CC_non'])}
-    cond_ave_activity =  {epoch: [] for epoch in epoch_masks.keys()} # To store condition average activity.
-    if perm: # Create data structure to store permuted condition average activity.
-        cond_ave_permuted = [{epoch: [] for epoch in epoch_masks.keys()} for i in range(perm)]
-    for session in sessions:
-        aligned_spikes = session.calcium_data['aligned']['spikes']
-        n_trials = aligned_spikes.shape[0]
-        if log:
-            aligned_spikes = np.log2(aligned_spikes+0.01)
-        # Make mask for different conditions, each condition is a combination of trial events.
-        c, s, o = session.unpack_trial_data('CSO', bool)
-        binary_conds = [o,s,c] # Trial events used combinatorially to construct conditions.
-        cond_masks = []        # [n_condition, n_trials] indicating which trials correspond to each condition.
-        for i in range(2**len(binary_conds)):
-            cond_masks.append(np.all(np.vstack(
-                [bool(i & 1<<j) == binary_conds[j] for j in range(len(binary_conds))]),0))
-        cond_masks = np.vstack(cond_masks)[:,:n_trials]
-        _session_cond_ave(cond_ave_activity, aligned_spikes, cond_masks, epoch_masks, normalise)
-        if perm:
-            for cond_ave_perm in cond_ave_permuted:
-                np.random.shuffle(aligned_spikes) # Shuffle axis 0 only (trials)
-                # aligned_spikes = np.roll(aligned_spikes,np.random.randint(n_trials), axis=0)
-                _session_cond_ave(cond_ave_perm, aligned_spikes, cond_masks, epoch_masks, normalise)
-    RSA = _RSA(cond_ave_activity, _RSM_regressors())
-    # Permutation test for significance of predictor loadings.
-    if perm:
-        RSA_perm = [_RSA(cond_ave_perm, _RSM_regressors()) 
-                    for cond_ave_perm in cond_ave_permuted]
-        for epoch in epoch_masks:
-            true_coefs = RSA[epoch]['coefs']
-            perm_coefs = np.array([RSA_p[epoch]['coefs'] for RSA_p in RSA_perm])
-            p_values = np.mean(perm_coefs > true_coefs,0) # One sided
-            print('\nCoefficient P values for {} epoch:'.format(epoch))
-            name_len = max([len(name) for name in RSA[epoch]['codes']])
-            for i, name in enumerate(RSA[epoch]['codes']):
-                print('  ' + name.ljust(name_len) + ': {:.3f}'.format(p_values[i+1]))
-    # Plotting
-    plt.figure(fig_no, figsize=[9,9]).clf()
-    for i, epoch in enumerate(RSA):
-        # Plot similarity matricies
-        plt.subplot(3,4,i+1)
-        plt.imshow(RSA[epoch]['rsm'], vmax=vmax, vmin=-vmax)
-        plt.xticks([])
-        plt.yticks([])
-        plt.title(epoch)
-        if i == 3:
-            pos = plt.gca().get_position()
-            cbar =  plt.colorbar(cax=plt.axes([pos.x1+0.02, pos.y0, 0.015, pos.height]))
-        # Plot regression coeficients.
-        plt.subplot(3,4,i+9)
-        x = np.arange(len(RSA[epoch]['coefs'])-1)+1
-        plt.bar(x, RSA[epoch]['coefs'][1:])
-        plt.xticks(x, RSA[epoch]['codes'].keys(), rotation=-45, ha='left')
-        plt.gca().axhline(0, color='k', linewidth=0.5)
-        if i == 0: plt.ylabel('Regression loading')
-    for i, (code_name, code) in enumerate(RSA[epoch]['codes'].items()):
-        # Plot regressors.
-        plt.subplot(3,len(RSA[epoch]['codes']), i+len(RSA[epoch]['codes'])+1)
-        plt.imshow(code)
-        plt.xticks([])
-        plt.yticks([])
-        plt.title(code_name)
-    if save_dir: 
-        plt.savefig(os.path.join(save_dir,'RSA.pdf'))
-
-def _session_cond_ave(cond_ave_activity, aligned_spikes, cond_masks, epoch_masks, normalise):
-    '''Evaluate the condition average activity for a session.'''
-    for epoch in epoch_masks:
-        epoch_activity = np.mean(aligned_spikes[:,:,epoch_masks[epoch]],2)                # [n_trials, n_neurons]
-        epoch_cond_ave = np.vstack([np.mean(epoch_activity[cm,:],0)for cm in cond_masks]) # [n_conditions, n_neurons]
-        if normalise: # Normalise each neurons mean and standard devation across conditions.
-             epoch_cond_ave = (epoch_cond_ave-np.mean(epoch_cond_ave,0))/np.std(epoch_cond_ave,0)
-        else:
-            epoch_cond_ave = epoch_cond_ave-np.mean(epoch_cond_ave,0)
-        cond_ave_activity[epoch].append(epoch_cond_ave)
-
-def _RSA(cond_ave_activity, codes):
-    '''Given the average activity in each condition and trial epoch calculate the similarity
-    matrix for each epoch and regress them onto a set of candiate neural codes.'''
-    # Setup regression model.
-    X = np.vstack([p.flatten().astype(float) for p in [np.eye(8)] + list(codes.values())]).T # Predictor matrix [n_conditions**2, n_predictors]
-    ols = LinearRegression()
-    # Evaluate RSA matrix and regression coefficients for each epoch.
-    RSA = {} # To store similarity matrices and regression coefs for each condition.
-    for epoch in cond_ave_activity.keys():
-        # Evaluate similarity matrix
-        similarity_matrix = np.corrcoef(np.hstack(cond_ave_activity[epoch]))
-        # Regress similarity matrix onto candidate codes.
-        y = similarity_matrix.flatten() # [n_conditions**2]
-        ols.fit(X,y)
-        RSA[epoch] = {'rsm': similarity_matrix,
-                      'coefs': ols.coef_,
-                      'codes': codes}
-    return RSA
-
-def _RSM_regressors():
-    '''Make a set of regressors each expressing the expected similarity matrix for a
-    candidate neural code'''
-    # Choice second step and outcome in each condition.
-    c_mask = np.array([bool(i & 1<<2) for i in range(2**3)])
-    s_mask = np.array([bool(i & 1<<1) for i in range(2**3)])
-    o_mask = np.array([bool(i & 1<<0) for i in range(2**3)])
-    # Choice, second step and outcome codes.
-    c_code = c_mask[:,None] == c_mask[None,:]
-    s_code = s_mask[:,None] == s_mask[None,:]
-    o_code = o_mask[:,None] == o_mask[None,:]
-    # Conjunctive codes.
-    cs_code = c_code & s_code
-    co_code = c_code & o_code
-    so_code = s_code & o_code
-    return OrderedDict(
-        zip(['choice', 'sec. step', 'outcome','ch. & ss.', 'ch. & out.', 'ss. & out.'],
-            [c_code  , s_code     , o_code   , cs_code   , co_code     , so_code     ]))
-
-# -------------------------------------------------------------------------------
 # Trajectory analysis
 # -------------------------------------------------------------------------------
 
@@ -1146,7 +904,7 @@ def decoding_analysis(sessions, C=0.01, n_rep=10, fig_no=1):
         # Choice, second-step and outcome window inds.
         win_ch = [15,20]
         win_ss = [23,28]
-        win_oc = [31,36]
+        win_oc = [32,37]
         # Make data matricies
         l = np.zeros(n_trials*3, int)         # State space locations
         A = np.zeros([n_trials*3, n_neurons]) # Neuronal activity
@@ -1166,6 +924,7 @@ def decoding_analysis(sessions, C=0.01, n_rep=10, fig_no=1):
     # Combine neurons across sessions and run decoding analysis.
     state_counts = np.array([list(Counter(S).values()) for S in ses_locs])
     include_session = np.min(state_counts,1) >= 10
+    median_visits = np.median(state_counts[include_session,:])
     clf = LogisticRegression(solver='lbfgs', multi_class='multinomial',
             penalty='l2', C=C, fit_intercept=False, max_iter=1000)
     xval_scores = []
@@ -1188,7 +947,8 @@ def decoding_analysis(sessions, C=0.01, n_rep=10, fig_no=1):
     mean_scores = np.mean(xval_scores,0)
     xval_conf_mat = np.mean(np.stack(xval_conf_mat),0)
     print(f'Included {cA.shape[1]} neurons from the {np.sum(include_session)}'
-           ' sessions with at least 10 visits to each state-space location')
+           ' sessions with at least 10 visits to each state-space location,'
+           f'median {median_visits} visits per location.')
     print(f'Cross val score: {np.mean(mean_scores):.2f} ± {sem(mean_scores):.2f}')
     # Plot confusion matrix.
     labels = ['ch._B.','ch._T.','ss_B.R.','ss_T.R.','ss_B.L.','ss_T.L.',

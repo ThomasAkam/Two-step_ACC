@@ -61,11 +61,11 @@ def save_experiments():
 # Figure panels.
 #----------------------------------------------------------------------------
 
-def figure_S6():
-    pl.plot_session(sessions_ctrl[0], fig_no='S6B')
-    pl.reversal_analysis(sessions_ctrl, fig_no='S6C')
-    sa.logistic_regression_comparison(sessions_jaws, fig_no='S6D1', title='JAWS')
-    sa.logistic_regression_comparison(sessions_ctrl, fig_no='S6D2', title='GFP')
+def figure_S8():
+    pl.plot_session(sessions_ctrl[0], fig_no='S8B')
+    pl.reversal_analysis(sessions_ctrl, fig_no='S8C')
+    sa.logistic_regression_comparison(sessions_jaws, fig_no='S8D1', title='JAWS')
+    sa.logistic_regression_comparison(sessions_ctrl, fig_no='S8D2', title='GFP')
 
 #----------------------------------------------------------------------------
 # Permutation tests.
