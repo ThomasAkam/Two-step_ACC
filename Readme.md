@@ -4,7 +4,7 @@ This repository contains analysis code and pyControl task definition code for th
 
 *Thomas Akam, Ines Rodrigues-Vaz, Ivo Marcelo, Xiangyu Zhang, Michael Pereira, Rodrigo Freire Oliveira, Peter Dayan, Rui M. Costa*. 
 
-Neuron 2020. 
+Neuron 109.1 (2021): 149-163.  https://doi.org/10.1016/j.neuron.2020.10.013
 
 ---
 
